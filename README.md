@@ -21,7 +21,6 @@ This is a FastAPI application that uses the Ollama Python client to generate doc
 
 Make sure you have [Ollama installed](https://ollama.com) and the Qwen model running:
 
-
 ```bash
 ollama run qwen3:14b
 ```
@@ -55,6 +54,8 @@ You can send a POST request to the `/generate-docs` endpoint with a JSON body li
   "code": "def add(a, b):\n    return a + b"
 }
 ```
+
+> ⚠️ **Important:** Your request must be in **JSON format**, and it must include a `"code"` field with the code snippet as its value.
 
 ### 5. Access the Root Endpoint
 
