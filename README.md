@@ -4,7 +4,11 @@ A small FastAPI service that turns code snippets into clean Markdown documentati
 
 ## Features
 
-- `POST /generate-docs` returns Markdown docs for a code snippet
+- `POST /generate-docs` returns docs for a code snippet, in that language's native style
+- Detects the language from a `language` field, the `filename` extension, or the code itself
+- Two output formats: a Markdown reference summary, or your code with paste-ready doc comments
+  (Python docstrings, JSDoc, TSDoc, Javadoc, KDoc, Go doc comments, rustdoc `///`, C# XML docs,
+  Doxygen for C/C++, YARD, PHPDoc)
 - Works with any Ollama chat model, local or remote (e.g. over Tailscale)
 - Configured with environment variables or a TOML file, no code edits needed
 - Reuses one Ollama connection, logs each request, and returns clear errors when Ollama is down
@@ -50,17 +54,47 @@ curl -s http://127.0.0.1:8000/generate-docs \
 ```
 
 ```json
-{"documentation": "# add\n\nAdds two numbers..."}
+{
+  "documentation": "# add\n\nAdds two numbers...",
+  "language": "python",
+  "language_source": "content",
+  "output_format": "markdown"
+}
+```
+
+Optional request fields:
+
+| Field | Values | Default | Purpose |
+| --- | --- | --- | --- |
+| `language` | `python`, `javascript`, `typescript`, `java`, `kotlin`, `go`, `rust`, `csharp`, `cpp`, `c`, `ruby`, `php` (aliases like `ts`, `golang`, `c#` work) | detected | Forces the language |
+| `filename` | e.g. `"handlers.go"` | none | Detects the language from the extension |
+| `output_format` | `markdown` or `inline` | `markdown` | `inline` returns your code with native doc comments added, ready to paste back |
+
+Detection order is `language`, then `filename`, then a quick look at the code; `language_source` in the response says which one was used (`request`, `filename`, `content` or `fallback`). For example:
+
+```bash
+curl -s http://127.0.0.1:8000/generate-docs \
+  -H 'Content-Type: application/json' \
+  -d '{"code": "func Add(a, b int) int {\n\treturn a + b\n}", "filename": "math.go", "output_format": "inline"}'
+```
+
+```json
+{
+  "documentation": "// Add returns the sum of a and b.\nfunc Add(a, b int) int {\n\treturn a + b\n}",
+  "language": "go",
+  "language_source": "filename",
+  "output_format": "inline"
+}
 ```
 
 | Status | Meaning |
 | --- | --- |
 | 200 | Documentation generated |
-| 400 | `code` was empty |
-| 422 | Body was not JSON or had no `code` field |
+| 400 | `code` was empty, or `language` is not supported |
+| 422 | Body was not JSON, had no `code` field, or `output_format` was invalid |
 | 502 | Ollama was unreachable, timed out, or returned an error (e.g. model not pulled) |
 
-`GET /` returns a status message and the configured model.
+`GET /` returns a status message and the configured model. `GET /languages` lists every supported language with its extensions and doc comment style.
 
 From Python:
 
@@ -68,6 +102,13 @@ From Python:
 from docgen import generate_docs
 
 print(generate_docs("def add(a, b):\n    return a + b", language="python"))
+print(generate_docs(open("server.go").read(), filename="server.go", output_format="inline"))
+
+# generate() also reports which language was used and how it was found.
+from docgen import generate
+
+result = generate("fn main() {}")
+print(result.language.key, result.language_source)  # rust content
 ```
 
 ## Configuration
@@ -96,8 +137,9 @@ src/docgen/
   api.py             FastAPI app (create_app factory)
   config.py          Settings: defaults, TOML file, env vars
   client.py          Shared Ollama client
-  prompts.py         System prompt and message construction
-  generator.py       generate_docs(): the model call, independent of the API
+  languages.py       Supported languages, doc styles and language detection
+  prompts.py         Per-language prompts and output cleanup
+  generator.py       generate() / generate_docs(): the model call, independent of the API
   logging_config.py  Logging setup
   __main__.py        `python -m docgen` server entry point
 tests/               pytest suite; Ollama is faked, no server needed

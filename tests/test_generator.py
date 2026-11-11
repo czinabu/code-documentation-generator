@@ -3,8 +3,9 @@ import ollama
 import pytest
 
 from docgen.client import get_client
-from docgen.generator import DocGenerationError, generate_docs
-from docgen.prompts import SYSTEM_PROMPT, build_messages
+from docgen.generator import DocGenerationError, generate, generate_docs
+from docgen.languages import UnknownLanguageError, get_language
+from docgen.prompts import system_prompt
 
 
 def test_generate_docs_sends_prompt(fake_ollama, settings):
@@ -12,14 +13,30 @@ def test_generate_docs_sends_prompt(fake_ollama, settings):
     assert result == "# Docs\n\nAdds two numbers."
     (call,) = fake_ollama.calls
     assert call["model"] == "test-model"
-    assert call["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
+    assert call["messages"][0] == {
+        "role": "system",
+        "content": system_prompt(get_language("python"), "markdown"),
+    }
     assert call["messages"][1]["content"] == "def add(a, b):\n    return a + b"
 
 
-def test_language_hint_included():
-    messages = build_messages("fn main() {}", language="Rust")
-    assert "Language: Rust" in messages[1]["content"]
-    assert "```rust" in messages[1]["content"]
+def test_language_hint_selects_prompt(fake_ollama, settings):
+    generate_docs("fn main() {}", language="Rust", settings=settings)
+    assert "```rust" in fake_ollama.calls[0]["messages"][0]["content"]
+
+
+def test_generate_reports_language_and_cleans_inline(fake_ollama, settings):
+    fake_ollama.reply = "<think>x</think>```go\n// Add adds.\nfunc Add() {}\n```"
+    result = generate("func Add() {}", filename="a.go", output_format="inline", settings=settings)
+    assert result.documentation == "// Add adds.\nfunc Add() {}"
+    assert (result.language.key, result.language_source) == ("go", "filename")
+    assert "Go doc comments" in fake_ollama.calls[0]["messages"][0]["content"]
+
+
+def test_unknown_language_rejected_before_model_call(fake_ollama, settings):
+    with pytest.raises(UnknownLanguageError):
+        generate_docs("x", language="cobol", settings=settings)
+    assert fake_ollama.calls == []
 
 
 def test_strips_think_block(fake_ollama, settings):
