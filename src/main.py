@@ -1,7 +1,11 @@
+from typing import Literal, Optional
+
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import ollama
-from typing import Dict
+
+from languages import LANGUAGES, UnknownLanguageError, detect_language
+from prompts import build_messages, clean_output
 
 app = FastAPI(
     title="Local AI Code Documentation Generator",
@@ -16,49 +20,59 @@ OLLAMA_HOST = "http://100.65.149.81:11434"   # ← Update with your actual Tails
 
 class CodeRequest(BaseModel):
     code: str
+    language: Optional[str] = Field(
+        default=None,
+        description="Language key or alias (e.g. 'python', 'ts', 'go'). Overrides detection.",
+    )
+    filename: Optional[str] = Field(
+        default=None,
+        description="Original filename; its extension is used to detect the language.",
+    )
+    output_format: Literal["markdown", "inline"] = Field(
+        default="markdown",
+        description="'markdown' for a reference summary, 'inline' for the code with native doc comments added.",
+    )
 
 
-@app.post("/generate-docs", response_model=Dict[str, str])
-def generate_docs(request: CodeRequest) -> Dict[str, str]:
+class DocsResponse(BaseModel):
+    documentation: str
+    language: str
+    language_source: str
+    output_format: str
+
+
+@app.post("/generate-docs", response_model=DocsResponse)
+def generate_docs(request: CodeRequest) -> DocsResponse:
     """
-    Generate clean, professional documentation for the provided code snippet.
+    Generate documentation for the provided code in the language's native style.
     """
     if not request.code or not request.code.strip():
         raise HTTPException(status_code=400, detail="Code input cannot be empty.")
 
     try:
-        print(f"DEBUG: Using model: {MODEL_NAME} | Host: {OLLAMA_HOST}")
+        language, source = detect_language(request.code, request.language, request.filename)
+    except UnknownLanguageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        print(f"DEBUG: Using model: {MODEL_NAME} | Host: {OLLAMA_HOST} | "
+              f"Language: {language.key} ({source}) | Format: {request.output_format}")
 
         client = ollama.Client(host=OLLAMA_HOST)
 
         response = client.chat(
             model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert technical documentation writer. "
-                        "Generate clean, professional, and well-structured Markdown documentation "
-                        "for the given code snippet.\n\n"
-                        "Rules:\n"
-                        "- Use proper Markdown with headings (#, ##, ###)\n"
-                        "- Start with a brief overview\n"
-                        "- Include Parameters and Returns sections when applicable\n"
-                        "- Add a short usage example\n"
-                        "- Keep it concise and readable\n"
-                        "- Do not add extra explanations or fluff"
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": request.code
-                }
-            ]
+            messages=build_messages(request.code, language, request.output_format),
         )
 
-        documentation = response["message"]["content"].strip()
+        documentation = clean_output(response["message"]["content"], request.output_format)
 
-        return {"documentation": documentation}
+        return DocsResponse(
+            documentation=documentation,
+            language=language.key,
+            language_source=source,
+            output_format=request.output_format,
+        )
 
     except Exception as e:
         print(f"ERROR: {str(e)}")
@@ -66,6 +80,15 @@ def generate_docs(request: CodeRequest) -> Dict[str, str]:
             status_code=500,
             detail=f"An error occurred while generating documentation: {str(e)}"
         )
+
+
+@app.get("/languages")
+def list_languages():
+    """List supported languages, their file extensions and doc comment style."""
+    return [
+        {"key": l.key, "name": l.name, "extensions": list(l.extensions), "doc_style": l.doc_style}
+        for l in LANGUAGES
+    ]
 
 
 @app.get("/")
