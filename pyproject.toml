@@ -24,6 +24,7 @@ dev = [
 
 [project.scripts]
 docgen-server = "docgen.__main__:main"
+docgen = "docgen.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

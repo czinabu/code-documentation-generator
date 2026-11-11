@@ -54,17 +54,21 @@ def build_messages(
     code: str,
     language: Language | str | None = None,
     output_format: OutputFormat = "markdown",
+    *,
+    context: str | None = None,
 ) -> list[dict[str, str]]:
     """Return the chat messages sent to the model for ``code``.
 
     ``language`` may be a :class:`Language`, a key or alias such as ``"rust"``,
-    or ``None`` for the generic prompt.
+    or ``None`` for the generic prompt. ``context`` is an optional note placed
+    before the code, e.g. that it is one part of a larger file.
     """
     if isinstance(language, str):
         language = get_language(language)
+    user_content = f"{context}\n\n{code}" if context else code
     return [
         {"role": "system", "content": system_prompt(language or GENERIC, output_format)},
-        {"role": "user", "content": code},
+        {"role": "user", "content": user_content},
     ]
 
 

@@ -35,12 +35,15 @@ def generate(
     filename: str | None = None,
     output_format: OutputFormat = "markdown",
     settings: Settings | None = None,
+    *,
+    context: str | None = None,
 ) -> DocResult:
     """Generate documentation for ``code`` and report which language was used.
 
     The language comes from ``language`` (a key or alias), else the extension of
     ``filename``, else a guess from the code. ``output_format`` is ``"markdown"``
     for a reference summary or ``"inline"`` for the code with native doc comments.
+    ``context`` is an optional note for the model placed before the code.
 
     Raises ``ValueError`` for empty input or an unsupported ``language``, and
     ``DocGenerationError`` when the Ollama server is unreachable or returns an error.
@@ -49,7 +52,7 @@ def generate(
         raise ValueError("Code input cannot be empty.")
 
     lang, source = detect_language(code, language, filename)
-    messages = build_messages(code, lang, output_format)
+    messages = build_messages(code, lang, output_format, context=context)
 
     settings = settings or Settings.load()
     client = get_client(settings.ollama_host, settings.timeout)
@@ -93,9 +96,13 @@ def generate_docs(
     filename: str | None = None,
     output_format: OutputFormat = "markdown",
     settings: Settings | None = None,
+    *,
+    context: str | None = None,
 ) -> str:
     """Generate documentation for ``code`` and return it as a string.
 
     Same arguments and errors as :func:`generate`.
     """
-    return generate(code, language, filename, output_format, settings).documentation
+    return generate(
+        code, language, filename, output_format, settings, context=context
+    ).documentation

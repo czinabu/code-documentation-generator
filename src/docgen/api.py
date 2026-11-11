@@ -12,6 +12,7 @@ from docgen.config import Settings
 from docgen.generator import DocGenerationError, generate
 from docgen.languages import LANGUAGES
 from docgen.logging_config import configure_logging
+from docgen.project import document_project, model_doc_function
 
 
 class CodeRequest(BaseModel):
@@ -43,6 +44,15 @@ class LanguageInfo(BaseModel):
     name: str
     extensions: list[str]
     doc_style: str
+
+
+class ProjectRequest(BaseModel):
+    source: str = Field(description="Folder to document, on the machine running the API.")
+    out: str = Field("docs", description="Folder to write the Markdown pages to.")
+    lang: str = "auto"
+    exclude: list[str] = []
+    force: bool = False
+    dry_run: bool = False
 
 
 def get_settings(request: Request) -> Settings:
@@ -106,5 +116,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             for lang in LANGUAGES
         ]
+
+    @app.post("/generate-project-docs")
+    def generate_project(request: ProjectRequest, settings: SettingsDep) -> dict:
+        """Document every source file in a folder, like the ``docgen`` CLI.
+
+        Unchanged files are skipped. Returns a per-file report.
+        """
+        try:
+            report = document_project(
+                request.source,
+                request.out,
+                doc_fn=model_doc_function(settings),
+                lang=request.lang,
+                exclude=request.exclude,
+                force=request.force,
+                dry_run=request.dry_run,
+                cache_salt=settings.model,
+            )
+        except (ValueError, NotADirectoryError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if report.error:
+            raise HTTPException(status_code=502, detail=report.error)
+        return report.to_dict()
 
     return app
