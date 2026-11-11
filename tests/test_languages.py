@@ -1,15 +1,31 @@
 import pytest
 
-from languages import GENERIC, LANGUAGES, UnknownLanguageError, detect_language, from_filename, get_language
+from docgen.languages import (
+    GENERIC,
+    LANGUAGES,
+    UnknownLanguageError,
+    detect_language,
+    from_filename,
+    get_language,
+)
 
 
 @pytest.mark.parametrize(
     "filename,key",
     [
-        ("app.py", "python"), ("index.js", "javascript"), ("App.tsx", "typescript"),
-        ("Main.java", "java"), ("main.go", "go"), ("lib.rs", "rust"), ("Program.cs", "csharp"),
-        ("vec.hpp", "cpp"), ("util.c", "c"), ("model.rb", "ruby"), ("index.php", "php"),
-        ("Build.kt", "kotlin"), ("dir/SCRIPT.PY", "python"),
+        ("app.py", "python"),
+        ("index.js", "javascript"),
+        ("App.tsx", "typescript"),
+        ("Main.java", "java"),
+        ("main.go", "go"),
+        ("lib.rs", "rust"),
+        ("Program.cs", "csharp"),
+        ("vec.hpp", "cpp"),
+        ("util.c", "c"),
+        ("model.rb", "ruby"),
+        ("index.php", "php"),
+        ("Build.kt", "kotlin"),
+        ("dir/SCRIPT.PY", "python"),
     ],
 )
 def test_from_filename(filename, key):
@@ -26,7 +42,16 @@ def test_extensions_are_unique():
     assert len(seen) == len(set(seen))
 
 
-@pytest.mark.parametrize("name,key", [("Python", "python"), ("ts", "typescript"), ("golang", "go"), ("C#", "csharp"), ("c++", "cpp")])
+@pytest.mark.parametrize(
+    "name,key",
+    [
+        ("Python", "python"),
+        ("ts", "typescript"),
+        ("golang", "go"),
+        ("C#", "csharp"),
+        ("c++", "cpp"),
+    ],
+)
 def test_get_language_aliases(name, key):
     assert get_language(name).key == key
 
@@ -46,7 +71,11 @@ def test_get_language_unknown():
         ("interface Point { x: number; y: number }\n", "typescript"),
         ("package main\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n", "go"),
         ("pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n", "rust"),
-        ("public class Calc {\n  public static int add(int a, int b) {\n    return a + b;\n  }\n}\n", "java"),
+        (
+            "public class Calc {\n  public static int add(int a, int b) {\n"
+            "    return a + b;\n  }\n}\n",
+            "java",
+        ),
         ("using System;\nnamespace Demo {\n}\n", "csharp"),
         ("#include <vector>\nstd::vector<int> v;\n", "cpp"),
         ("#include <stdio.h>\nint add(int a, int b) { return a + b; }\n", "c"),

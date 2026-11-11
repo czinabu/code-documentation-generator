@@ -1,83 +1,82 @@
-# FastAPI + Ollama + Qwen Documentation Generator
+# Local AI Code Documentation Generator
 
-This is a FastAPI application that uses the Ollama Python client to generate documentation for code snippets using the Qwen model.
+A small FastAPI service that turns code snippets into clean Markdown documentation using a model running on your own [Ollama](https://ollama.com) server (default: `qwen3:14b`). Nothing leaves your machine or network.
 
 ## Features
-- Accepts a code snippet via a POST request
-- Uses the Qwen model from Ollama to generate documentation
-- Language-aware: detects the language from a `language` field, the `filename` extension, or the code itself
-- Two output formats: a Markdown reference summary, or the original code with paste-ready native doc comments
-  (Python docstrings, JSDoc, TSDoc, Javadoc, KDoc, Go doc comments, rustdoc `///`, C# XML docs, Doxygen, YARD, PHPDoc)
-- Configurable Ollama host (e.g., for remote or Tailscale setups)
-- Includes a root endpoint (`/`) to show the current model and status
+
+- `POST /generate-docs` returns docs for a code snippet, in that language's native style
+- Detects the language from a `language` field, the `filename` extension, or the code itself
+- Two output formats: a Markdown reference summary, or your code with paste-ready doc comments
+  (Python docstrings, JSDoc, TSDoc, Javadoc, KDoc, Go doc comments, rustdoc `///`, C# XML docs,
+  Doxygen for C/C++, YARD, PHPDoc)
+- Works with any Ollama chat model, local or remote (e.g. over Tailscale)
+- Configured with environment variables or a TOML file, no code edits needed
+- Reuses one Ollama connection, logs each request, and returns clear errors when Ollama is down
+- Strips `<think>` blocks that reasoning models such as qwen3 emit
+- Usable as a library: `from docgen import generate_docs`
 
 ## Requirements
 
-- Python 3.8 or higher
-- Ollama server running locally or remotely (e.g., via Tailscale)
-- The Qwen model running in Ollama
-
-## How to Run
-
-### 1. Install Ollama and Run the Qwen Model
-
-Make sure you have [Ollama installed](https://ollama.com) and the Qwen model running:
+- Python 3.11+
+- An Ollama server with a model pulled, for example:
 
 ```bash
-ollama run qwen3:14b
+ollama pull qwen3:14b
 ```
 
-If you're using a remote Ollama server (e.g., via Tailscale), you can set the `OLLAMA_HOST` in your `main.py` file accordingly.
-
-### 2. Install Dependencies
-
-Install the required Python packages:
+## Install
 
 ```bash
-pip install fastapi uvicorn ollama
+git clone https://github.com/czinabu/code-documentation-generator.git
+cd code-documentation-generator
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt   # pinned versions
+pip install -e .                  # installs the docgen package
 ```
 
-### 3. Run the App
+## Run
 
-Start the FastAPI application:
+From the repository root:
 
 ```bash
-uvicorn main:app --reload
+python -m docgen                  # http://127.0.0.1:8000
+python -m docgen --host 0.0.0.0 --port 8000 --reload
 ```
 
-The app will be available at `http://localhost:8000`.
+`docgen-server` (installed by `pip install -e .`) does the same thing. Interactive API docs are at `http://127.0.0.1:8000/docs`.
 
-### 4. Send a POST Request
+## Use
 
-You can send a POST request to the `/generate-docs` endpoint with a JSON body like this:
+```bash
+curl -s http://127.0.0.1:8000/generate-docs \
+  -H 'Content-Type: application/json' \
+  -d '{"code": "def add(a, b):\n    return a + b"}'
+```
 
 ```json
 {
-  "code": "def add(a, b):\n    return a + b"
+  "documentation": "# add\n\nAdds two numbers...",
+  "language": "python",
+  "language_source": "content",
+  "output_format": "markdown"
 }
 ```
 
-> ⚠️ **Important:** Your request must be in **JSON format**, and it must include a `"code"` field with the code snippet as its value.
-
-Optional fields:
+Optional request fields:
 
 | Field | Values | Default | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `language` | `python`, `javascript`, `typescript`, `java`, `kotlin`, `go`, `rust`, `csharp`, `cpp`, `c`, `ruby`, `php` (aliases like `ts`, `golang`, `c#` work) | detected | Forces the language |
 | `filename` | e.g. `"handlers.go"` | none | Detects the language from the extension |
 | `output_format` | `markdown` or `inline` | `markdown` | `inline` returns your code with native doc comments added, ready to paste back |
 
-Detection order is `language`, then `filename`, then a quick look at the code. Example:
+Detection order is `language`, then `filename`, then a quick look at the code; `language_source` in the response says which one was used (`request`, `filename`, `content` or `fallback`). For example:
 
-```json
-{
-  "code": "func Add(a, b int) int {\n\treturn a + b\n}",
-  "filename": "math.go",
-  "output_format": "inline"
-}
+```bash
+curl -s http://127.0.0.1:8000/generate-docs \
+  -H 'Content-Type: application/json' \
+  -d '{"code": "func Add(a, b int) int {\n\treturn a + b\n}", "filename": "math.go", "output_format": "inline"}'
 ```
-
-The response includes the detected language and how it was found:
 
 ```json
 {
@@ -88,34 +87,72 @@ The response includes the detected language and how it was found:
 }
 ```
 
-`GET /languages` lists every supported language with its extensions and doc comment style.
+| Status | Meaning |
+| --- | --- |
+| 200 | Documentation generated |
+| 400 | `code` was empty, or `language` is not supported |
+| 422 | Body was not JSON, had no `code` field, or `output_format` was invalid |
+| 502 | Ollama was unreachable, timed out, or returned an error (e.g. model not pulled) |
 
-### 5. Access the Root Endpoint
+`GET /` returns a status message and the configured model. `GET /languages` lists every supported language with its extensions and doc comment style.
 
-You can access the root endpoint at `http://localhost:8000` to see a simple status message and the current model being used.
+From Python:
 
----
+```python
+from docgen import generate_docs
+
+print(generate_docs("def add(a, b):\n    return a + b", language="python"))
+print(generate_docs(open("server.go").read(), filename="server.go", output_format="inline"))
+
+# generate() also reports which language was used and how it was found.
+from docgen import generate
+
+result = generate("fn main() {}")
+print(result.language.key, result.language_source)  # rust content
+```
 
 ## Configuration
 
-You can customize the following in your `main.py` file:
+Settings come from defaults, then an optional TOML file, then environment variables (later wins).
 
-- `MODEL_NAME`: Change this to use a different model (e.g., `"qwen2.5:14b"`).
-- `OLLAMA_HOST`: Update this if you're connecting to a remote Ollama server (e.g., via Tailscale).
+| Setting | Environment variable | Default |
+| --- | --- | --- |
+| `model` | `DOCGEN_MODEL` | `qwen3:14b` |
+| `ollama_host` | `DOCGEN_OLLAMA_HOST`, falling back to `OLLAMA_HOST` | `http://localhost:11434` |
+| `timeout` (seconds) | `DOCGEN_TIMEOUT` | `120` |
+| `log_level` | `DOCGEN_LOG_LEVEL` | `INFO` |
 
----
-
-## Running Tests
+For example, to use a remote Ollama server over Tailscale:
 
 ```bash
-pip install -r requirements.txt -r requirements-dev.txt
-pytest
+DOCGEN_OLLAMA_HOST=http://100.x.y.z:11434 DOCGEN_MODEL=qwen2.5-coder:14b python -m docgen
 ```
 
-Tests mock the Ollama client, so no model server is needed.
+To use a file instead, copy `docgen.example.toml` to `docgen.toml` in the directory you run from, or point `DOCGEN_CONFIG` at any TOML file.
 
----
+## Project layout
+
+```
+src/docgen/
+  api.py             FastAPI app (create_app factory)
+  config.py          Settings: defaults, TOML file, env vars
+  client.py          Shared Ollama client
+  languages.py       Supported languages, doc styles and language detection
+  prompts.py         Per-language prompts and output cleanup
+  generator.py       generate() / generate_docs(): the model call, independent of the API
+  logging_config.py  Logging setup
+  __main__.py        `python -m docgen` server entry point
+tests/               pytest suite; Ollama is faked, no server needed
+```
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt && pip install -e .
+pytest
+ruff check . && ruff format --check .
+```
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+MIT. See [LICENSE](LICENSE).

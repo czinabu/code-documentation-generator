@@ -9,17 +9,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import PurePath
-from typing import Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
 class Language:
     key: str
     name: str
-    extensions: Tuple[str, ...]
+    extensions: tuple[str, ...]
     doc_style: str
     style_rules: str
-    aliases: Tuple[str, ...] = field(default_factory=tuple)
+    aliases: tuple[str, ...] = field(default_factory=tuple)
 
 
 GENERIC = Language(
@@ -33,7 +32,7 @@ GENERIC = Language(
     ),
 )
 
-LANGUAGES: Tuple[Language, ...] = (
+LANGUAGES: tuple[Language, ...] = (
     Language(
         key="python",
         name="Python",
@@ -41,7 +40,8 @@ LANGUAGES: Tuple[Language, ...] = (
         aliases=("py", "python3"),
         doc_style="PEP 257 docstrings in Google style",
         style_rules=(
-            '- Use triple-quoted docstrings (""") as the first statement of each module, class and function.\n'
+            '- Use triple-quoted docstrings (""") as the first statement of each module, class '
+            "and function.\n"
             "- One-line summary, blank line, then details.\n"
             "- Use Google-style sections: Args:, Returns:, Yields:, Raises:, Example:.\n"
             "- Do not repeat type hints that are already in the signature unless they add meaning."
@@ -54,8 +54,10 @@ LANGUAGES: Tuple[Language, ...] = (
         aliases=("js", "node", "jsx"),
         doc_style="JSDoc block comments",
         style_rules=(
-            "- Use /** ... */ blocks placed directly above each function, class and exported constant.\n"
-            "- Use @param {Type} name - description, @returns {Type} description, @throws {Type} description.\n"
+            "- Use /** ... */ blocks placed directly above each function, class and exported "
+            "constant.\n"
+            "- Use @param {Type} name - description, @returns {Type} description, @throws {Type} "
+            "description.\n"
             "- Add @example where a short example helps; use @async / @class where relevant."
         ),
     ),
@@ -67,7 +69,8 @@ LANGUAGES: Tuple[Language, ...] = (
         doc_style="TSDoc block comments",
         style_rules=(
             "- Use /** ... */ blocks placed directly above each declaration.\n"
-            "- Use @param name - description, @returns description, @throws description, @example.\n"
+            "- Use @param name - description, @returns description, @throws description, "
+            "@example.\n"
             "- Do not put types in braces; TypeScript already carries the types."
         ),
     ),
@@ -100,9 +103,12 @@ LANGUAGES: Tuple[Language, ...] = (
         aliases=("golang",),
         doc_style="Go doc comments",
         style_rules=(
-            "- Use // line comments placed directly above each package clause and exported declaration.\n"
-            "- Each comment starts with the name of the thing it documents (e.g. \"// Add returns ...\").\n"
-            "- Write complete sentences. Do not use @param style tags; describe parameters in prose.\n"
+            "- Use // line comments placed directly above each package clause and exported "
+            "declaration.\n"
+            '- Each comment starts with the name of the thing it documents (e.g. "// Add returns '
+            '...").\n'
+            "- Write complete sentences. Do not use @param style tags; describe parameters in "
+            "prose.\n"
             "- Use [Name] links and indented blocks for code, per Go 1.19 doc comment syntax."
         ),
     ),
@@ -115,7 +121,8 @@ LANGUAGES: Tuple[Language, ...] = (
         style_rules=(
             "- Use /// outer doc comments above items and //! for module or crate docs.\n"
             "- Write in Markdown. Start with a one-line summary.\n"
-            "- Use the conventional headings: # Arguments, # Returns, # Errors, # Panics, # Safety, # Examples.\n"
+            "- Use the conventional headings: # Arguments, # Returns, # Errors, # Panics, # "
+            "Safety, # Examples.\n"
             "- Put examples in ``` fenced blocks so they work as doctests."
         ),
     ),
@@ -127,7 +134,7 @@ LANGUAGES: Tuple[Language, ...] = (
         doc_style="XML documentation comments",
         style_rules=(
             "- Use /// lines with XML tags above each type and member.\n"
-            "- Use <summary>, <param name=\"...\">, <returns>, <exception cref=\"...\">, <example>."
+            '- Use <summary>, <param name="...">, <returns>, <exception cref="...">, <example>.'
         ),
     ),
     Language(
@@ -148,7 +155,8 @@ LANGUAGES: Tuple[Language, ...] = (
         doc_style="Doxygen comments",
         style_rules=(
             "- Use /** ... */ blocks above each function, struct and macro.\n"
-            "- Use @brief, @param[in]/@param[out], @return, @note. Mention ownership and NULL handling."
+            "- Use @brief, @param[in]/@param[out], @return, @note. Mention ownership and NULL "
+            "handling."
         ),
     ),
     Language(
@@ -159,7 +167,8 @@ LANGUAGES: Tuple[Language, ...] = (
         doc_style="YARD comments",
         style_rules=(
             "- Use # line comments directly above each method, class and module.\n"
-            "- Use YARD tags: @param name [Type] description, @return [Type] description, @raise [Error], @example."
+            "- Use YARD tags: @param name [Type] description, @return [Type] description, @raise "
+            "[Error], @example."
         ),
     ),
     Language(
@@ -174,8 +183,8 @@ LANGUAGES: Tuple[Language, ...] = (
     ),
 )
 
-_BY_KEY: Dict[str, Language] = {}
-_BY_EXTENSION: Dict[str, Language] = {}
+_BY_KEY: dict[str, Language] = {}
+_BY_EXTENSION: dict[str, Language] = {}
 for _lang in LANGUAGES:
     for _name in (_lang.key, _lang.name.lower(), *_lang.aliases):
         _BY_KEY[_name] = _lang
@@ -191,13 +200,12 @@ def get_language(name: str) -> Language:
     """Look up a language by key, display name or alias (case-insensitive)."""
     lang = _BY_KEY.get(name.strip().lower())
     if lang is None:
-        raise UnknownLanguageError(
-            f"Unsupported language '{name}'. Supported: {', '.join(l.key for l in LANGUAGES)}."
-        )
+        supported = ", ".join(item.key for item in LANGUAGES)
+        raise UnknownLanguageError(f"Unsupported language '{name}'. Supported: {supported}.")
     return lang
 
 
-def from_filename(filename: str) -> Optional[Language]:
+def from_filename(filename: str) -> Language | None:
     """Return the language for a filename's extension, or None if unknown."""
     suffix = PurePath(filename).suffix.lower()
     return _BY_EXTENSION.get(suffix)
@@ -211,24 +219,42 @@ _SHEBANGS = (
     (re.compile(r"^#!.*\bruby"), "ruby"),
     (re.compile(r"^#!.*\bphp"), "php"),
 )
-_HEURISTICS = (
-    (re.compile(r"<\?php"), "php"),
-    (re.compile(r"^\s*package\s+\w+\s*$", re.M), "go"),
-    (re.compile(r"^\s*func\s+(\(\w+\s+\*?\w+\)\s*)?\w+\s*\(", re.M), "go"),
-    (re.compile(r"^\s*(pub(\(crate\))?\s+)?fn\s+\w+|^\s*impl\b|^\s*use\s+\w+::", re.M), "rust"),
-    (re.compile(r"^\s*(public|private|protected)\s+(static\s+)?(final\s+)?[\w<>\[\]]+\s+\w+\s*\(.*\)\s*(throws\s+[\w, ]+)?\s*\{", re.M), "java"),
-    (re.compile(r"^\s*using\s+System|^\s*namespace\s+[\w.]+\s*[{;]", re.M), "csharp"),
-    (re.compile(r"^\s*(data\s+class|fun)\s+\w+", re.M), "kotlin"),
-    (re.compile(r"^\s*#include\s*<(iostream|vector|string|memory|map)>|std::|\btemplate\s*<", re.M), "cpp"),
-    (re.compile(r"^\s*#include\s*[<\"]", re.M), "c"),
-    (re.compile(r"^\s*(interface|type)\s+\w+\s*[={<]|:\s*(string|number|boolean)\b", re.M), "typescript"),
-    (re.compile(r"^\s*(async\s+)?def\s+\w+\s*\(.*\)\s*(->\s*[^:]+)?:|^\s*class\s+\w+(\(.*\))?:\s*$|^\s*(from\s+\w[\w.]*\s+)?import\s+\w", re.M), "python"),
-    (re.compile(r"^\s*def\s+\w+[?!]?(\(.*\))?\s*$|^\s*end\s*$", re.M), "ruby"),
-    (re.compile(r"\bfunction\b|=>|\bconst\s+\w+\s*=|\bmodule\.exports\b|\brequire\(", re.M), "javascript"),
+_HEURISTIC_SOURCES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("php", (r"<\?php",)),
+    ("go", (r"^\s*package\s+\w+\s*$", r"^\s*func\s+(\(\w+\s+\*?\w+\)\s*)?\w+\s*\(")),
+    ("rust", (r"^\s*(pub(\(crate\))?\s+)?fn\s+\w+", r"^\s*impl\b", r"^\s*use\s+\w+::")),
+    (
+        "java",
+        (
+            r"^\s*(public|private|protected)\s+(static\s+)?(final\s+)?[\w<>\[\]]+\s+\w+"
+            r"\s*\(.*\)\s*(throws\s+[\w, ]+)?\s*\{",
+        ),
+    ),
+    ("csharp", (r"^\s*using\s+System", r"^\s*namespace\s+[\w.]+\s*[{;]")),
+    ("kotlin", (r"^\s*(data\s+class|fun)\s+\w+",)),
+    ("cpp", (r"^\s*#include\s*<(iostream|vector|string|memory|map)>", r"std::", r"\btemplate\s*<")),
+    ("c", (r"^\s*#include\s*[<\"]",)),
+    ("typescript", (r"^\s*(interface|type)\s+\w+\s*[={<]", r":\s*(string|number|boolean)\b")),
+    (
+        "python",
+        (
+            r"^\s*(async\s+)?def\s+\w+\s*\(.*\)\s*(->\s*[^:]+)?:",
+            r"^\s*class\s+\w+(\(.*\))?:\s*$",
+            r"^\s*(from\s+\w[\w.]*\s+)?import\s+\w",
+        ),
+    ),
+    ("ruby", (r"^\s*def\s+\w+[?!]?(\(.*\))?\s*$", r"^\s*end\s*$")),
+    (
+        "javascript",
+        (r"\bfunction\b", r"=>", r"\bconst\s+\w+\s*=", r"\bmodule\.exports\b", r"\brequire\("),
+    ),
+)
+_HEURISTICS = tuple(
+    (re.compile("|".join(patterns), re.M), key) for key, patterns in _HEURISTIC_SOURCES
 )
 
 
-def guess_from_code(code: str) -> Optional[Language]:
+def guess_from_code(code: str) -> Language | None:
     """Best-effort guess from source text. Returns None when nothing matches."""
     first_line = code.lstrip().splitlines()[0] if code.strip() else ""
     for pattern, key in _SHEBANGS:
@@ -242,9 +268,9 @@ def guess_from_code(code: str) -> Optional[Language]:
 
 def detect_language(
     code: str,
-    language: Optional[str] = None,
-    filename: Optional[str] = None,
-) -> Tuple[Language, str]:
+    language: str | None = None,
+    filename: str | None = None,
+) -> tuple[Language, str]:
     """Resolve the language for a request.
 
     Precedence: explicit ``language`` field, then ``filename`` extension, then
