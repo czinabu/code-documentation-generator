@@ -164,14 +164,12 @@ docker run --rm -v "$PWD:/work" -w /work \
 
 The image points at `http://host.docker.internal:11434` by default. Set `-e DOCGEN_OLLAMA_HOST=http://100.x.y.z:11434` for a remote server, and `-e DOCGEN_MODEL=...` to change the model. `--add-host` is only needed on Linux; Docker Desktop provides that name already. The container runs as UID 1000, so add `--user "$(id -u):$(id -g)"` if your files are owned by another user.
 
-## Example output
+## Try it on the sample project
 
-[`examples/sample-project`](examples/sample-project) is a small Python, TypeScript and Go project, and [`examples/sample-docs`](examples/sample-docs) is what `docgen` produced for it with `qwen3:14b`. Start at [`examples/sample-docs/index.md`](examples/sample-docs/index.md).
-
-To regenerate it:
+[`examples/sample-project`](examples/sample-project) is a small Python, TypeScript and Go project for trying `docgen` out:
 
 ```bash
-docgen examples/sample-project --out examples/sample-docs --force
+docgen examples/sample-project --out examples/sample-docs
 ```
 
 ## Configuration
@@ -211,7 +209,7 @@ src/docgen/
   logging_config.py  Logging setup
   __main__.py        `python -m docgen` server entry point
 tests/               pytest suite; Ollama is faked, no server needed
-examples/            Sample project and the docs generated for it
+examples/            Small multi-language project to try docgen on
 Dockerfile           Container image for the API and CLI
 .github/workflows/   CI: ruff, pytest on Python 3.11-3.13, Docker build
 ```
