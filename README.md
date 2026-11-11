@@ -1,5 +1,7 @@
 # Local AI Code Documentation Generator
 
+[![CI](https://github.com/czinabu/code-documentation-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/czinabu/code-documentation-generator/actions/workflows/ci.yml)
+
 A small FastAPI service that turns code snippets into clean Markdown documentation using a model running on your own [Ollama](https://ollama.com) server (default: `qwen3:14b`). Nothing leaves your machine or network.
 
 ## Features
@@ -144,6 +146,32 @@ curl -s http://127.0.0.1:8000/generate-project-docs \
 
 It returns a per-file report (`generated`, `unchanged`, `failed`, and a `files` list). Paths are on the machine running the API, which can read and write anywhere that user can, so keep the server bound to localhost or a network you trust.
 
+## Run with Docker
+
+```bash
+docker build -t docgen .
+
+# API server on http://127.0.0.1:8000, talking to Ollama on the host
+docker run --rm -p 8000:8000 \
+  --add-host=host.docker.internal:host-gateway \
+  docgen
+
+# Document a project in the current directory into ./docs
+docker run --rm -v "$PWD:/work" -w /work \
+  --add-host=host.docker.internal:host-gateway \
+  docgen docgen . --out docs
+```
+
+The image points at `http://host.docker.internal:11434` by default. Set `-e DOCGEN_OLLAMA_HOST=http://100.x.y.z:11434` for a remote server, and `-e DOCGEN_MODEL=...` to change the model. `--add-host` is only needed on Linux; Docker Desktop provides that name already. The container runs as UID 1000, so add `--user "$(id -u):$(id -g)"` if your files are owned by another user.
+
+## Try it on the sample project
+
+[`examples/sample-project`](examples/sample-project) is a small Python, TypeScript and Go project for trying `docgen` out:
+
+```bash
+docgen examples/sample-project --out examples/sample-docs
+```
+
 ## Configuration
 
 Settings come from defaults, then an optional TOML file, then environment variables (later wins).
@@ -181,6 +209,9 @@ src/docgen/
   logging_config.py  Logging setup
   __main__.py        `python -m docgen` server entry point
 tests/               pytest suite; Ollama is faked, no server needed
+examples/            Small multi-language project to try docgen on
+Dockerfile           Container image for the API and CLI
+.github/workflows/   CI: ruff, pytest on Python 3.11-3.13, Docker build
 ```
 
 ## Development
@@ -190,6 +221,8 @@ pip install -r requirements-dev.txt && pip install -e .
 pytest
 ruff check . && ruff format --check .
 ```
+
+CI runs the same checks on every push and pull request, plus a Docker build and smoke test.
 
 ## License
 
