@@ -4,6 +4,8 @@ A small FastAPI service that turns code snippets into clean Markdown documentati
 
 ## Features
 
+- `docgen src/ --out docs/` documents a whole project: one Markdown page per file plus an index
+- Splits large files at functions and classes to fit the model's context, and skips unchanged files on reruns
 - `POST /generate-docs` returns docs for a code snippet, in that language's native style
 - Detects the language from a `language` field, the `filename` extension, or the code itself
 - Two output formats: a Markdown reference summary, or your code with paste-ready doc comments
@@ -111,6 +113,37 @@ result = generate("fn main() {}")
 print(result.language.key, result.language_source)  # rust content
 ```
 
+## Document a whole project
+
+```bash
+docgen src/ --out docs/
+```
+
+This walks `src/`, documents every source file it recognises, and writes `docs/<path>.md` for each one plus `docs/index.md` linking them all, grouped by folder.
+
+| Option | What it does |
+| --- | --- |
+| `--lang auto` | Default. Documents every supported language (see `GET /languages`), detected by file extension. Pass `--lang python,go` to limit it. |
+| `--out DIR` | Where pages go (default `docs`). It is never documented itself, even inside the source folder. |
+| `--exclude GLOB` | Skip matching files or folders, e.g. `-x "tests/*"`. Repeatable. |
+| `--max-chars N` | Largest piece sent to the model at once (default 12000). Bigger files are split at top-level functions and classes, and the page gets one section per part. |
+| `--force` | Regenerate every page. Without it, files whose content, model and settings are unchanged are skipped, using hashes in `docs/.docgen-cache.json`. |
+| `--dry-run` | List what would be documented without calling the model. |
+| `--model`, `--host` | Override the configured model and Ollama server for this run. |
+| `--json`, `--quiet` | Machine-readable summary, or summary only. |
+
+`.git`, `node_modules`, virtualenvs, build output, hidden folders and files over 512 KB are always skipped. Pages for deleted source files are removed. If Ollama can't be reached the run stops after the first file; run it again to pick up where it left off. The exit code is 0 on success, 1 if any file failed, 2 for bad arguments.
+
+The API runs the same code at `POST /generate-project-docs`:
+
+```bash
+curl -s http://127.0.0.1:8000/generate-project-docs \
+  -H 'Content-Type: application/json' \
+  -d '{"source": "/path/to/project/src", "out": "/path/to/project/docs"}'
+```
+
+It returns a per-file report (`generated`, `unchanged`, `failed`, and a `files` list). Paths are on the machine running the API, which can read and write anywhere that user can, so keep the server bound to localhost or a network you trust.
+
 ## Configuration
 
 Settings come from defaults, then an optional TOML file, then environment variables (later wins).
@@ -140,6 +173,11 @@ src/docgen/
   languages.py       Supported languages, doc styles and language detection
   prompts.py         Per-language prompts and output cleanup
   generator.py       generate() / generate_docs(): the model call, independent of the API
+  cli.py             `docgen` command for whole projects
+  project.py         document_project(): shared by the CLI and the API
+  files.py           Finds source files, skipping vendored and build folders
+  chunker.py         Splits large files at functions and classes
+  cache.py           Content-hash cache so unchanged files are skipped
   logging_config.py  Logging setup
   __main__.py        `python -m docgen` server entry point
 tests/               pytest suite; Ollama is faked, no server needed
