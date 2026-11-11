@@ -1,0 +1,6 @@
+# Copy to docgen.toml (or point DOCGEN_CONFIG at it). Env vars override these values.
+[docgen]
+model = "qwen3:14b"
+ollama_host = "http://localhost:11434"
+timeout = 120
+log_level = "INFO"

@@ -1,77 +1,116 @@
-# FastAPI + Ollama + Qwen Documentation Generator
+# Local AI Code Documentation Generator
 
-This is a FastAPI application that uses the Ollama Python client to generate documentation for code snippets using the Qwen model.
+A small FastAPI service that turns code snippets into clean Markdown documentation using a model running on your own [Ollama](https://ollama.com) server (default: `qwen3:14b`). Nothing leaves your machine or network.
 
 ## Features
-- Accepts a code snippet via a POST request
-- Uses the Qwen model from Ollama to generate documentation
-- Returns documentation in Markdown format
-- Configurable Ollama host (e.g., for remote or Tailscale setups)
-- Includes a root endpoint (`/`) to show the current model and status
+
+- `POST /generate-docs` returns Markdown docs for a code snippet
+- Works with any Ollama chat model, local or remote (e.g. over Tailscale)
+- Configured with environment variables or a TOML file, no code edits needed
+- Reuses one Ollama connection, logs each request, and returns clear errors when Ollama is down
+- Strips `<think>` blocks that reasoning models such as qwen3 emit
+- Usable as a library: `from docgen import generate_docs`
 
 ## Requirements
 
-- Python 3.8 or higher
-- Ollama server running locally or remotely (e.g., via Tailscale)
-- The Qwen model running in Ollama
-
-## How to Run
-
-### 1. Install Ollama and Run the Qwen Model
-
-Make sure you have [Ollama installed](https://ollama.com) and the Qwen model running:
+- Python 3.11+
+- An Ollama server with a model pulled, for example:
 
 ```bash
-ollama run qwen3:14b
+ollama pull qwen3:14b
 ```
 
-If you're using a remote Ollama server (e.g., via Tailscale), you can set the `OLLAMA_HOST` in your `main.py` file accordingly.
-
-### 2. Install Dependencies
-
-Install the required Python packages:
+## Install
 
 ```bash
-pip install fastapi uvicorn ollama
+git clone https://github.com/czinabu/code-documentation-generator.git
+cd code-documentation-generator
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt   # pinned versions
+pip install -e .                  # installs the docgen package
 ```
 
-### 3. Run the App
+## Run
 
-Start the FastAPI application:
+From the repository root:
 
 ```bash
-uvicorn main:app --reload
+python -m docgen                  # http://127.0.0.1:8000
+python -m docgen --host 0.0.0.0 --port 8000 --reload
 ```
 
-The app will be available at `http://localhost:8000`.
+`docgen-server` (installed by `pip install -e .`) does the same thing. Interactive API docs are at `http://127.0.0.1:8000/docs`.
 
-### 4. Send a POST Request
+## Use
 
-You can send a POST request to the `/generate-docs` endpoint with a JSON body like this:
+```bash
+curl -s http://127.0.0.1:8000/generate-docs \
+  -H 'Content-Type: application/json' \
+  -d '{"code": "def add(a, b):\n    return a + b"}'
+```
 
 ```json
-{
-  "code": "def add(a, b):\n    return a + b"
-}
+{"documentation": "# add\n\nAdds two numbers..."}
 ```
 
-> ⚠️ **Important:** Your request must be in **JSON format**, and it must include a `"code"` field with the code snippet as its value.
+| Status | Meaning |
+| --- | --- |
+| 200 | Documentation generated |
+| 400 | `code` was empty |
+| 422 | Body was not JSON or had no `code` field |
+| 502 | Ollama was unreachable, timed out, or returned an error (e.g. model not pulled) |
 
-### 5. Access the Root Endpoint
+`GET /` returns a status message and the configured model.
 
-You can access the root endpoint at `http://localhost:8000` to see a simple status message and the current model being used.
+From Python:
 
----
+```python
+from docgen import generate_docs
+
+print(generate_docs("def add(a, b):\n    return a + b", language="python"))
+```
 
 ## Configuration
 
-You can customize the following in your `main.py` file:
+Settings come from defaults, then an optional TOML file, then environment variables (later wins).
 
-- `MODEL_NAME`: Change this to use a different model (e.g., `"qwen2.5:14b"`).
-- `OLLAMA_HOST`: Update this if you're connecting to a remote Ollama server (e.g., via Tailscale).
+| Setting | Environment variable | Default |
+| --- | --- | --- |
+| `model` | `DOCGEN_MODEL` | `qwen3:14b` |
+| `ollama_host` | `DOCGEN_OLLAMA_HOST`, falling back to `OLLAMA_HOST` | `http://localhost:11434` |
+| `timeout` (seconds) | `DOCGEN_TIMEOUT` | `120` |
+| `log_level` | `DOCGEN_LOG_LEVEL` | `INFO` |
 
----
+For example, to use a remote Ollama server over Tailscale:
+
+```bash
+DOCGEN_OLLAMA_HOST=http://100.x.y.z:11434 DOCGEN_MODEL=qwen2.5-coder:14b python -m docgen
+```
+
+To use a file instead, copy `docgen.example.toml` to `docgen.toml` in the directory you run from, or point `DOCGEN_CONFIG` at any TOML file.
+
+## Project layout
+
+```
+src/docgen/
+  api.py             FastAPI app (create_app factory)
+  config.py          Settings: defaults, TOML file, env vars
+  client.py          Shared Ollama client
+  prompts.py         System prompt and message construction
+  generator.py       generate_docs(): the model call, independent of the API
+  logging_config.py  Logging setup
+  __main__.py        `python -m docgen` server entry point
+tests/               pytest suite; Ollama is faked, no server needed
+```
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt && pip install -e .
+pytest
+ruff check . && ruff format --check .
+```
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+MIT. See [LICENSE](LICENSE).
