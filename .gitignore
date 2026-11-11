@@ -7,3 +7,8 @@ __pycache__/
 *.log
 *.sqlite
 venv/
+docgen.toml
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/

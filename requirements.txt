@@ -1,3 +1,6 @@
-fastapi
-uvicorn
-ollama
+# Exact versions for reproducible installs. Ranges live in pyproject.toml.
+fastapi==0.162.4
+uvicorn==0.54.0
+ollama==0.6.3
+httpx==0.28.1
+pydantic==2.14.3
